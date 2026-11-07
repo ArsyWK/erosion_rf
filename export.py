@@ -42,7 +42,6 @@ target_proj = ee.Projection(TARGET_CRS).atScale(SCALE)
 
 # region general func
 def to_grid(image, method='bilinear'):
-    """Resample onto the common 30 m UTM grid (do NOT clip before this)."""
     return image.resample(method).reproject(target_proj)
 # endregion
 

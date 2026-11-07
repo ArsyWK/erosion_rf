@@ -82,12 +82,10 @@ def current_fingerprint():
 
 
 def invalidate_stale_cache():
-    """Delete cached outputs if the input raster or split settings changed
-    (e.g. after re-exporting from GEE or changing the band list)."""
     fp = current_fingerprint()
     old = json.loads(FINGERPRINT_JSON.read_text()) if FINGERPRINT_JSON.exists() else None
     if FORCE_RERUN or old != fp:
-        print("[cache] inputs changed (or forced): clearing cached results")
+        print("[cache] clearing cached results")
         for p in CACHE_FILES:
             p.unlink(missing_ok=True)
         FINGERPRINT_JSON.write_text(json.dumps(fp, indent=2))
@@ -158,9 +156,6 @@ def node_tune_model(state: PipelineState) -> PipelineState:
 
 
 def node_buffer_sensitivity(state: PipelineState) -> PipelineState:
-    """Same outer block folds, growing train/test buffer, best RF params from tuning.
-    AUC that falls and then plateaus as the buffer grows = autocorrelation leakage removed.
-    Fold 1 here is the same test region that nested_spatial_split uses."""
     if not RUN_BUFFER_SENSITIVITY:
         print("[buffer_sensitivity] disabled")
         return {"status": "sensitivity_skipped"}
@@ -180,12 +175,12 @@ def node_buffer_sensitivity(state: PipelineState) -> PipelineState:
     rows = []
     for k, (tv0, te) in enumerate(folds):
         if len(np.unique(y[te])) < 2:
-            print(f"  fold {k + 1}: single-class test set, skipped")
+            print(f"  fold {k + 1}: single-class test set")
             continue
         for buf in BUFFER_GRID:
             tv, _ = apply_buffer(tv0, te, coords, buf)
             if len(np.unique(y[tv])) < 2:
-                print(f"  fold {k + 1}, buffer {buf} m: one class left in training, skipped")
+                print(f"  fold {k + 1}, buffer {buf}")
                 continue
             rng = np.random.default_rng(RANDOM_STATE + k)
             bal = balance_indices(tv, y, rng)
@@ -218,9 +213,7 @@ def node_buffer_sensitivity(state: PipelineState) -> PipelineState:
         auc_sd=("roc_auc", lambda s: s.std(ddof=0)),
         pr_auc_mean=("pr_auc", "mean"),
     ).reset_index()
-    print("\n[buffer_sensitivity] mean over outer folds:")
     print(summary.round(4).to_string(index=False))
-    print("Pick the smallest buffer after which AUC stops dropping (within about 1 SD).")
     summary.to_csv(SENS_CSV, index=False)
     return {"status": "sensitivity_done"}
 

@@ -1,20 +1,3 @@
-"""
-SHAP feature importance over ALL spatial outer folds + an interactive slider explorer.
-
-For every outer BlockKFold fold (same folds, buffer and seeds as Manager.py's
-buffer_sensitivity node) this script:
-  1. rebuilds the training set (buffered, balanced, capped), fits an RF with the tuned params,
-  2. explains held-out test pixels of that fold with TreeSHAP,
-  3. computes a partial-dependence curve per feature (feature swept, others as observed).
-Everything is pooled for the importance table; fold-to-fold variation is reported too.
-CIs come from a spatial BLOCK bootstrap (resampling blocks, not pixels).
-
-Outputs (in ../erosion_run_cache/shap_outputs):
-  shap_importance.csv, shap_bar.png, shap_beeswarm.png, shap_dependence_*.png
-  feature_effect_explorer.html   <- open in a browser, move the slider per feature
-
-Needs from Manager.py: data.npz (X, y, coords, predictor_cols) and best_params.json.
-"""
 import json
 import pathlib
 import pickle
@@ -86,11 +69,10 @@ print("RF params:", params)
 
 # region SHAP + PDP per fold
 def shap_class1(explainer, xs):
-    """SHAP values for the high class (class 1), in probability units."""
     try:
         sv = explainer(xs)
     except Exception as e:
-        print(f"  additivity check failed ({e}); retrying with check_additivity=False")
+        print(f"  additivity check failed ({e})")
         sv = explainer(xs, check_additivity=False)
     vals, base = np.asarray(sv.values), np.asarray(sv.base_values)
     if vals.ndim == 3:                                      # (rows, features, classes)
@@ -278,7 +260,7 @@ exp = shap.Explanation(values=vals, base_values=res["base"], data=res["X"], feat
 #  Beeswarm
 plt.figure()
 shap.plots.beeswarm(exp, max_display=F, show=False)
-plt.title("How each factor pushes pixels toward the high (right) or low (left) class")
+plt.title("How each factor pushes pixels toward the high  or low  class")
 plt.tight_layout()
 plt.savefig(OUT_DIR / "shap_beeswarm.png", dpi=200, bbox_inches="tight")
 
@@ -322,31 +304,9 @@ def build_explorer():
         })
     feats.sort(key=lambda f: f["rank"])
     payload = {"target": TARGET_NAME, "k": len(K_used), "features": feats}
-    HTML_OUT.write_text(HTML_TEMPLATE.replace("__DATA__", json.dumps(payload)), encoding="utf-8")
-    print(f"Saved slider explorer -> {HTML_OUT.resolve()}")
 
 
 build_explorer()
 plt.show()
 print(f"\nSaved table and figures to {OUT_DIR.resolve()}")
 # endregion
-
-"""
-- Folds: each fold's model is trained on buffered, balanced, spatially separate data and
-  explained on its own held-out region. "Top-3 in folds" and "Folds agree on direction" show
-  whether a result is stable across regions or an artefact of one test area.
-- Mean |SHAP| (bar chart / table): how much a feature moves a pixel's predicted probability of
-  the high class. Bigger = more influential FOR THE MODEL. Overlapping block-bootstrap
-  intervals = effectively tied.
-- Beeswarm: each dot is a pixel; position = push toward low/high; colour = feature value.
-- Slider explorer: partial dependence shows what the model predicts as one feature is swept;
-  the SHAP panel shows the push on real pixels. Where they disagree, suspect correlated features.
-- Pearson = linear association of SHAP with the feature value; Spearman = monotonic. A threshold
-  or U-shaped effect can have a weak linear r but still matter; read the plots.
-- SHAP explains the MODEL, not the world. The target is a multi-year spectral degradation
-  anomaly (BSI / NDVI), not RUSLE. It is bare soil / vegetation loss, which also fires on
-  clearing, plantation turnover and landslide scars, so "high class" is not proof of erosion.
-  If the slope threshold is still part of the label definition (rather than a domain mask),
-  slope-derived features (slope, TWI, SPI) partly reproduce that definition.
-- Do not add NDVI, BSI or land cover as predictors: they define the label.
-"""
