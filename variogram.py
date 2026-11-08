@@ -8,7 +8,7 @@ import skgstat as skg
 from rasterio.transform import xy
 
 # region config
-GIS_RASTER = pathlib.Path(r"C:\Users\freya\Downloads\GIS\tapa\Erosion\tapanuli_tengah_noRUSLE_erosion_30m.tif")
+GIS_RASTER = pathlib.Path(r"YOUR_TIF_FILE")
 
 BAND_NAMES = ["elevation", "slope", "aspect_sin", "aspect_cos", "twi", "spi",
               "rainfall", "plan_curvature", "profile_curvature", "erosion_class"]
